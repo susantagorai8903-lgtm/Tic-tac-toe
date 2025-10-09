@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tic Tac Toe | Fullstack (Flask + PyScript)</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
+  <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+</head>
+
+<body>
+  <h1>🔥 Tic Tac Toe</h1>
+
+  <div class="board">
+    {% for i in range(9) %}
+      <div id="cell{{i}}" class="cell" pys-onClick="make_move({{i}})" onclick="window.make_move && window.make_move({{i}})"></div>
+    {% endfor %}
+  </div>
+
+  <div class="status" id="status">Player X's turn</div>
+  <button pys-onClick="reset_game" onclick="window.reset_game && window.reset_game()">Reset Game</button>
+  <button onclick="loadHistory()">Show Game History</button>
+
+  <div id="history"></div>
+
+  <!-- JavaScript game logic: handles clicks, UI updates and saving results to the server -->
+  <script>
+    const board = Array(9).fill("");
+    let current_player = 'X';
+    let game_over = false;
+
+    async function send_result(winner) {
+      await fetch('/save_result', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ winner })
+      });
+    }
+
+    function writeCell(index, value) {
+      const el = document.getElementById(`cell${index}`);
+      if (el) el.textContent = value;
+    }
+
+    function check_winner() {
+      const win_conditions = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      for (const combo of win_conditions) {
+        const [a,b,c] = combo;
+        if (board[a] && board[a] === board[b] && board[b] === board[c]) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function updateStatus(text) {
+      const s = document.getElementById('status');
+      if (s) s.textContent = text;
+    }
+
+    function make_move(index) {
+      if (game_over || board[index] !== '') return;
+      board[index] = current_player;
+      writeCell(index, current_player);
+
+      if (check_winner()) {
+        updateStatus(`🏆 Player ${current_player} wins!`);
+        send_result(current_player);
+        game_over = true;
+        return;
+      }
+
+      if (!board.includes('')) {
+        updateStatus(`😐 It's a draw!`);
+        send_result('Draw');
+        game_over = true;
+        return;
+      }
+
+      current_player = current_player === 'X' ? 'O' : 'X';
+      updateStatus(`Player ${current_player}'s turn`);
+    }
+
+    function reset_game() {
+      for (let i = 0; i < 9; i++) {
+        board[i] = '';
+        writeCell(i, '');
+      }
+      current_player = 'X';
+      game_over = false;
+      updateStatus("Player X's turn");
+    }
+
+    // Attach click handlers once DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      for (let i = 0; i < 9; i++) {
+        const el = document.getElementById(`cell${i}`);
+        if (el) el.addEventListener('click', () => make_move(i));
+      }
+      const resetBtn = document.querySelector('button[pys-onClick="reset_game"]');
+      if (resetBtn) resetBtn.addEventListener('click', reset_game);
+    });
+  </script>
+
+  <!-- Load PyScript code from an external static file (preferred) -->
+  <py-script src="{{ url_for('static', filename='game_logic.py') }}"></py-script>
+
+  <script>
+    async function loadHistory() {
+      const response = await fetch("/history");
+      const data = await response.json();
+      let html = "<h3>Recent Matches</h3><ul>";
+      data.forEach(([winner, time]) => {
+        html += `<li>${winner} - ${time}</li>`;
+      });
+      html += "</ul>";
+      document.getElementById("history").innerHTML = html;
+    }
+  </script>
+</body>
+</html>
